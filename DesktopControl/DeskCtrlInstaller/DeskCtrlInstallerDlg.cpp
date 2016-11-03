@@ -41,7 +41,7 @@ BOOL RemoteLoadLibrary(DWORD dwPid, LPCSTR lpszPath,
 	if(!bResult || dwWrited != dwNeedSize)
 		return FALSE;
 
-	HINSTANCE hKernel32 = LoadLibrary("Kernel32.dll");
+	HINSTANCE hKernel32 = LoadLibrary(_T("Kernel32.dll"));
 	LPVOID lpFunc = GetProcAddress(hKernel32, "LoadLibraryA");
 	if(lpFunc == NULL)
 		return FALSE;
@@ -76,7 +76,7 @@ BOOL RemoteFreeLibrary(DWORD dwPid, HINSTANCE Instance)
 	if(hProcess == NULL)
 		return FALSE;
 
-	HINSTANCE hKernel32 = LoadLibrary("Kernel32.dll");
+	HINSTANCE hKernel32 = LoadLibrary(_T("Kernel32.dll"));
 	LPVOID lpFunc = GetProcAddress(hKernel32, "FreeLibrary");
 	if(lpFunc == NULL)
 		return FALSE;
@@ -156,11 +156,12 @@ void CDeskCtrlInstallerDlg::DoDataExchange(CDataExchange* pDX)
 
 BOOL CDeskCtrlInstallerDlg::PrepareForSave()
 {
+	USES_CONVERSION;
 	CString strFuncPath;
 	GetAppFolderPath(strFuncPath);
 	strFuncPath.Append(_T("func.cfg"));
 
-	std::ofstream ofs(strFuncPath.GetString());
+	std::ofstream ofs(T2A(strFuncPath.GetString()));
 	if(!ofs.is_open())
 		return FALSE;
 	ofs << "1";
@@ -170,11 +171,13 @@ BOOL CDeskCtrlInstallerDlg::PrepareForSave()
 
 BOOL CDeskCtrlInstallerDlg::SaveDesktopConfig(const CString & strDes)
 {
+	USES_CONVERSION;
+
 	CString strDataPath;
 	GetAppFolderPath(strDataPath);
 	strDataPath.Append(_T("TidyDesktopIcons.cfg"));
 
-	std::ifstream ifs(strDataPath.GetString());
+	std::ifstream ifs(T2A(strDataPath.GetString()));
 	if(!ifs.is_open())
 		return FALSE;
 
@@ -199,13 +202,15 @@ BOOL CDeskCtrlInstallerDlg::SaveDesktopConfig(const CString & strDes)
 
 BOOL CDeskCtrlInstallerDlg::PrepareForRestore()
 {
+	USES_CONVERSION;
+
 	{
 		/// 写功能项
 		CString strFuncPath;
 		GetAppFolderPath(strFuncPath);
 		strFuncPath.Append(_T("func.cfg"));
 
-		std::ofstream ofs(strFuncPath.GetString());
+		std::ofstream ofs(T2A(strFuncPath.GetString()));
 		if(!ofs.is_open())
 			return FALSE;
 		ofs << "2";
@@ -215,21 +220,21 @@ BOOL CDeskCtrlInstallerDlg::PrepareForRestore()
 	{
 		/// 写数据项
 		int nSel = m_listData.GetCurSel();
-		const CString & strBase64 = m_arrDesktopCfg[nSel];
-		CString strData;
-		Base64_Decode(strData.GetBuffer((int)Base64_SrcLen(strBase64.GetLength()) + 1),
-			strBase64.GetString(), strBase64.GetLength());
-		strData.ReleaseBuffer();
+		std::string & strBase64 = m_arrDesktopCfg[nSel];
+
+		std::vector<char> arrData(Base64_SrcLen(strBase64.length()) + 1);
+		Base64_Decode(&arrData[0], strBase64.c_str(), strBase64.length());
+		arrData[arrData.size() - 1] = 0;
 
 		CString strFuncPath;
 		GetAppFolderPath(strFuncPath);
 		strFuncPath.Append(_T("TidyDesktopIcons.cfg"));
 
-		std::ofstream ofs(strFuncPath.GetString());
+		std::ofstream ofs(T2A(strFuncPath.GetString()));
 		if(!ofs.is_open()) {
 			return FALSE;
 		}
-		ofs << strData.GetString();
+		ofs << &arrData[0];
 		ofs.close();
 	}
 	
@@ -238,6 +243,8 @@ BOOL CDeskCtrlInstallerDlg::PrepareForRestore()
 
 BOOL CDeskCtrlInstallerDlg::SaveConfig()
 {
+	USES_CONVERSION;
+
 	DeleteFile(m_strCfgPath);
 	int nCount = m_listData.GetCount();
 
@@ -254,8 +261,8 @@ BOOL CDeskCtrlInstallerDlg::SaveConfig()
 		WritePrivateProfileString(APP_NAME, strKey, strValue, m_strCfgPath);
 		
 		strKey.Format(_T("file_%d"), i);
-		strValue = m_arrDesktopCfg[i];
-		WritePrivateProfileString(APP_NAME, strKey, strValue, m_strCfgPath);
+		WritePrivateProfileString(APP_NAME, strKey, 
+			CA2T(m_arrDesktopCfg[i].c_str()), m_strCfgPath);
 	}
 	return TRUE;
 }
@@ -272,9 +279,11 @@ END_MESSAGE_MAP()
 
 
 // CDeskCtrlInstallerDlg 消息处理程序
+#define MAX_CONTENT_LENGTH (4 * 1024)
 
 BOOL CDeskCtrlInstallerDlg::OnInitDialog()
 {
+	USES_CONVERSION;
 	CDialogEx::OnInitDialog();
 
 	// 将“关于...”菜单项添加到系统菜单中。
@@ -319,9 +328,9 @@ BOOL CDeskCtrlInstallerDlg::OnInitDialog()
 
 		strKey.Format(_T("file_%d"), i);
 		GetPrivateProfileString(APP_NAME, strKey, _T(""),
-			strValue.GetBuffer(MAX_PATH), MAX_PATH, m_strCfgPath);
+			strValue.GetBuffer(MAX_CONTENT_LENGTH), MAX_CONTENT_LENGTH, m_strCfgPath);
 		strValue.ReleaseBuffer();
-		m_arrDesktopCfg.push_back(strValue);
+		m_arrDesktopCfg.push_back((char *)CT2A(strValue.GetString()));
 	}
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
@@ -378,6 +387,8 @@ HCURSOR CDeskCtrlInstallerDlg::OnQueryDragIcon()
 
 void CDeskCtrlInstallerDlg::OnBnClickedBtnSaveDesktop()
 {
+	USES_CONVERSION;
+
 	/// 获取描述信息
 	CString strDes;
 	m_edtDes.GetWindowText(strDes);
@@ -405,7 +416,7 @@ void CDeskCtrlInstallerDlg::OnBnClickedBtnSaveDesktop()
 
 	/// 加载远程模块
 	if(!RemoteLoadLibrary(GetDesktopProcessId(), 
-		strAppPath.GetString(), &hInstance))
+		T2A(strAppPath.GetString()), &hInstance))
 	{
 		MessageBox(_T("创建远程线程失败"), _T("错误"), MB_ICONERROR | MB_OK);
 		return;
@@ -430,6 +441,8 @@ void CDeskCtrlInstallerDlg::OnBnClickedBtnSaveDesktop()
 
 void CDeskCtrlInstallerDlg::OnBnClickedBtnRestoreDesktop()
 {
+	USES_CONVERSION;
+
 	int nSel = m_listData.GetCurSel();
 	if(nSel == -1) {
 		MessageBox(_T("请选择要还原的项目"), _T("错误"), MB_OK);
@@ -451,7 +464,7 @@ void CDeskCtrlInstallerDlg::OnBnClickedBtnRestoreDesktop()
 
 	/// 加载远程模块
 	if(!RemoteLoadLibrary(GetDesktopProcessId(),
-		strAppPath.GetString(), &hInstance)) {
+		T2A(strAppPath.GetString()), &hInstance)) {
 		MessageBox(_T("创建远程线程失败"), _T("错误"), MB_ICONERROR | MB_OK);
 		return;
 	}

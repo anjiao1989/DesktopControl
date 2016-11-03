@@ -34,7 +34,7 @@ protected:
 	CEdit m_edtDes;
 
 	CString m_strCfgPath;
-	std::vector<CString> m_arrDesktopCfg;
+	std::vector<std::string> m_arrDesktopCfg;
 
 	// 生成的消息映射函数
 	virtual BOOL OnInitDialog();
